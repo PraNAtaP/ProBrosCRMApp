@@ -68,15 +68,51 @@ export interface CommissionSummary {
 
 // ─── Activity Log ────────────────────────────────
 export type ActivityType = 'call' | 'email' | 'meeting' | 'status_change' | 'note';
+export type MeetingType = 'Online' | 'Offline';
 
 export interface ActivityLog {
   id: number;
-  deal_id: number;
+  deal_id?: number | null;
+  contact_id?: number | null;
+  company_id?: number | null;
   user_id: number;
   user?: { id: number; name: string };
+  deal?: { id: number; title: string } | null;
+  contact?: { id: number; name: string; email?: string; phone?: string } | null;
+  company?: { id: number; name: string; address?: string } | null;
   activity_type: ActivityType;
+  meeting_type?: MeetingType | null;
+  start_time?: string | null;
+  duration?: number | null;
   notes?: string;
   created_at?: string;
+}
+
+// ─── Reports ─────────────────────────────────────
+export interface ReportStats {
+  total_calls: number;
+  total_meetings: number;
+  total_emails: number;
+  new_active_customers: number;
+  total_revenue: number;
+  total_profit: number;
+}
+
+export interface TrendDataPoint {
+  period_label: string;
+  calls: number;
+  meetings: number;
+  emails: number;
+  total: number;
+}
+
+export interface ReportData {
+  period: string;
+  start_date: string;
+  end_date: string;
+  stats: ReportStats;
+  trend: TrendDataPoint[];
+  recent_activities: ActivityLog[];
 }
 
 // ─── Deal ────────────────────────────────────────

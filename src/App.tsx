@@ -8,6 +8,7 @@ import ContactsPage from './pages/ContactsPage';
 import DealsPage from './pages/DealsPage';
 import CommissionManagement from './pages/CommissionManagement';
 import CompaniesPage from './pages/CompaniesPage';
+import ReportsPage from './pages/ReportsPage';
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -35,6 +36,7 @@ function AppRoutes() {
         <Route path="companies" element={<CompaniesPage />} />
         <Route path="deals" element={<DealsPage />} />
         <Route path="commissions" element={<CommissionManagement />} />
+        <Route path="reports" element={<ReportsPage />} />
       </Route>
     </Routes>
   );

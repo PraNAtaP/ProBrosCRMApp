@@ -19,12 +19,10 @@ const Dashboard: React.FC = () => {
   };
 
   const handleDealCreated = (_deal?: Deal) => {
-    // Refresh both Kanban and stats after deal creation
     refreshAll();
   };
 
   const handleStatsRefresh = () => {
-    // Called by KanbanBoard after successful drag-and-drop
     setStatsRefreshTrigger((prev) => prev + 1);
   };
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Search, Plus, Pencil, Trash2, Loader2, AlertCircle,
-  Users, Building2, Mail, Phone, Briefcase, RefreshCw,
+  Users, Building2, Mail, Phone, Briefcase, RefreshCw, FileText,
 } from 'lucide-react';
 import api from '../api';
 import ContactModal from '../components/ContactModal';
+import ActivityLoggerModal from '../components/ActivityLoggerModal';
 import type { Contact } from '../types';
 
 const ContactsPage: React.FC = () => {
@@ -17,6 +18,10 @@ const ContactsPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // Activity Logger state
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [logContact, setLogContact] = useState<Contact | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
@@ -70,6 +75,16 @@ const ContactsPage: React.FC = () => {
     fetchContacts();
   };
 
+  const handleLogActivity = (contact: Contact) => {
+    setLogContact(contact);
+    setShowLogModal(true);
+  };
+
+  const handleLogActivityGeneral = () => {
+    setLogContact(null);
+    setShowLogModal(true);
+  };
+
   return (
     <div className="flex flex-col h-full">
       <header className="px-8 py-6 flex items-center justify-between bg-white border-b border-slate-200 shrink-0">
@@ -77,13 +92,22 @@ const ContactsPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900">Contacts</h1>
           <p className="text-slate-500 mt-1">Manage your business contacts</p>
         </div>
-        <button
-          onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg font-medium transition-colors shadow-sm shadow-brand-900/10 active:scale-95 transform transition-transform"
-        >
-          <Plus className="w-4 h-4" />
-          Add New Contact
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleLogActivityGeneral}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-medium transition-colors shadow-sm active:scale-95 transform transition-transform"
+          >
+            <FileText className="w-4 h-4" />
+            Log Activity
+          </button>
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg font-medium transition-colors shadow-sm shadow-brand-900/10 active:scale-95 transform transition-transform"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Contact
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 p-6 overflow-auto">
@@ -185,6 +209,13 @@ const ContactsPage: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
+                            onClick={() => handleLogActivity(contact)}
+                            className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Log Activity"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => handleEdit(contact)}
                             className="p-2 text-slate-400 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors"
                             title="Edit"
@@ -223,6 +254,13 @@ const ContactsPage: React.FC = () => {
         onClose={() => { setShowModal(false); setEditingContact(null); }}
         onSaved={handleSaved}
         contact={editingContact}
+      />
+
+      <ActivityLoggerModal
+        isOpen={showLogModal}
+        onClose={() => { setShowLogModal(false); setLogContact(null); }}
+        onSuccess={fetchContacts}
+        preselectedContact={logContact}
       />
     </div>
   );
