@@ -1,4 +1,5 @@
 import axios from "axios";
+import axiosRetry from "axios-retry";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000/api",
@@ -8,7 +9,14 @@ const api = axios.create({
   },
 });
 
-// Request interceptor - attach Bearer token
+axiosRetry(api, {
+  retries: 3,
+  retryDelay: (retryCount) => retryCount * 1000,
+  retryCondition: (error) =>
+    axiosRetry.isNetworkOrIdempotentRequestError(error) ||
+    (error.response?.status !== undefined && error.response.status >= 500),
+});
+
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("auth_token");
@@ -21,7 +29,6 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-// Response interceptor - handle 401 errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {

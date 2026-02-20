@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { 
   MapPin, 
   Search, 
@@ -9,6 +9,7 @@ import {
   RefreshCw,
   AlertCircle
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../api';
 import AreaModal from '../components/AreaModal';
 
@@ -19,34 +20,27 @@ interface Area {
   companies_count?: number;
 }
 
+const fetchAreasApi = async (): Promise<Area[]> => {
+  const response = await api.get<{ data: Area[] }>('/areas');
+  return response.data.data;
+};
+
 const AreasPage: React.FC = () => {
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Modal State
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get<{ data: Area[] }>('/areas');
-      setAreas(res.data.data);
-    } catch (err) {
-      console.error('Error fetching areas:', err);
-      setError('Failed to load areas.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: areas = [], isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ['areas'],
+    queryFn: fetchAreasApi,
+    staleTime: 60 * 1000,
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const error = queryError ? 'Failed to load areas.' : deleteError;
 
   const handleDelete = async (area: Area) => {
     if (area.companies_count && area.companies_count > 0) {
@@ -58,11 +52,14 @@ const AreasPage: React.FC = () => {
     setDeletingId(area.id);
     try {
       await api.delete(`/areas/${area.id}`);
-      setAreas(prev => prev.filter(a => a.id !== area.id));
+      queryClient.setQueryData<Area[]>(['areas'], (old = []) =>
+        old.filter((a: Area) => a.id !== area.id)
+      );
     } catch (err: any) {
       console.error('Error deleting area:', err);
-      const message = err.response?.data?.message || 'Failed to delete area. Please try again.';
-      alert(message);
+      const message = err.response?.data?.message || 'Failed to delete area.';
+      setDeleteError(message);
+      setTimeout(() => setDeleteError(null), 3000);
     } finally {
       setDeletingId(null);
     }
@@ -79,17 +76,16 @@ const AreasPage: React.FC = () => {
   };
 
   const handleSaved = () => {
-    fetchData();
+    refetch();
   };
 
-  const filteredAreas = areas.filter(area => {
+  const filteredAreas = areas.filter((area: Area) => {
     const searchLower = searchQuery.toLowerCase();
     return area.name.toLowerCase().includes(searchLower);
   });
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <header className="px-8 py-6 flex items-center justify-between bg-white border-b border-slate-200 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Areas</h1>
@@ -97,7 +93,7 @@ const AreasPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
            <button
-            onClick={fetchData}
+            onClick={() => refetch()}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
           >
             <RefreshCw className="w-4 h-4" />
@@ -114,7 +110,6 @@ const AreasPage: React.FC = () => {
       </header>
 
       <div className="flex-1 p-6 overflow-auto">
-        {/* Search Bar */}
         <div className="flex flex-col md:flex-row gap-3 mb-6">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -128,18 +123,16 @@ const AreasPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="mb-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
-            <button onClick={fetchData} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+            <button onClick={() => refetch()} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
               <RefreshCw className="w-4 h-4" /> Retry
             </button>
           </div>
         )}
 
-        {/* Data Table */}
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-3 text-slate-500">
@@ -172,7 +165,7 @@ const AreasPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredAreas.map((area, index) => (
+                  {filteredAreas.map((area: Area, index: number) => (
                     <tr key={area.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-6 py-4">
                         <span className="text-sm text-slate-500 font-medium">{index + 1}</span>
@@ -223,7 +216,6 @@ const AreasPage: React.FC = () => {
               </table>
             </div>
             
-            {/* Footer */}
             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between">
               <span>
                 Showing {filteredAreas.length} area{filteredAreas.length !== 1 ? 's' : ''}

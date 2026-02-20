@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search, Pencil, Trash2, Loader2, AlertCircle,
   Briefcase, Building2, TrendingUp, RefreshCw, Filter,
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../api';
 import EditDealModal from '../components/EditDealModal';
 import type { Deal, DealStatus } from '../types';
@@ -34,13 +35,19 @@ const ALL_STATUSES: DealStatus[] = [
   'trial_order', 'active_customer', 'retained_growing', 'lost_customer',
 ];
 
+const fetchDealsApi = async (statusFilter: string): Promise<Deal[]> => {
+  const params: Record<string, string> = {};
+  if (statusFilter) params.status = statusFilter;
+  const response = await api.get<{ data: Deal[] }>('/deals', { params });
+  return response.data.data || (response.data as unknown as Deal[]);
+};
+
 const DealsPage: React.FC = () => {
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<DealStatus | ''>('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
@@ -51,28 +58,17 @@ const DealsPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const fetchDeals = useCallback(async () => {
-    try {
-      setError(null);
-      const params: Record<string, string> = {};
-      if (statusFilter) params.status = statusFilter;
-      const response = await api.get<{ data: Deal[] }>('/deals', { params });
-      setDeals(response.data.data || (response.data as unknown as Deal[]));
-    } catch (err) {
-      console.error('Failed to fetch deals:', err);
-      setError('Failed to load deals.');
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter]);
+  const { data: deals = [], isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ['deals', statusFilter],
+    queryFn: () => fetchDealsApi(statusFilter),
+    staleTime: 30 * 1000,
+  });
 
-  useEffect(() => {
-    fetchDeals();
-  }, [fetchDeals]);
+  const error = queryError ? 'Failed to load deals.' : deleteError;
 
   // Client-side search filter
   const filteredDeals = debouncedSearch
-    ? deals.filter((d) =>
+    ? deals.filter((d: Deal) =>
         d.title.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
         (d.company || '').toLowerCase().includes(debouncedSearch.toLowerCase()) ||
         (d.owner || '').toLowerCase().includes(debouncedSearch.toLowerCase())
@@ -84,11 +80,13 @@ const DealsPage: React.FC = () => {
     setDeletingId(id);
     try {
       await api.delete(`/deals/${id}`);
-      setDeals((prev) => prev.filter((d) => d.id !== id));
+      queryClient.setQueryData<Deal[]>(['deals', statusFilter], (old = []) =>
+        old.filter((d: Deal) => d.id !== id)
+      );
     } catch (err) {
       console.error('Failed to delete deal:', err);
-      setError('Failed to delete deal.');
-      setTimeout(() => setError(null), 3000);
+      setDeleteError('Failed to delete deal.');
+      setTimeout(() => setDeleteError(null), 3000);
     } finally {
       setDeletingId(null);
     }
@@ -100,7 +98,7 @@ const DealsPage: React.FC = () => {
   };
 
   const handleSaved = () => {
-    fetchDeals();
+    refetch();
   };
 
   const formatCurrency = (value: number): string =>
@@ -122,7 +120,7 @@ const DealsPage: React.FC = () => {
           <p className="text-slate-500 mt-1">Manage all your deals in one place</p>
         </div>
         <button
-          onClick={fetchDeals}
+          onClick={() => refetch()}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
         >
           <RefreshCw className="w-4 h-4" />
@@ -148,7 +146,7 @@ const DealsPage: React.FC = () => {
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <select
               value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as DealStatus | ''); setLoading(true); }}
+              onChange={(e) => setStatusFilter(e.target.value as DealStatus | '')}
               className="pl-9 pr-8 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent shadow-sm appearance-none min-w-[180px]"
             >
               <option value="">All Stages</option>
@@ -164,7 +162,7 @@ const DealsPage: React.FC = () => {
           <div className="mb-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
-            <button onClick={fetchDeals} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+            <button onClick={() => refetch()} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
               <RefreshCw className="w-4 h-4" /> Retry
             </button>
           </div>
@@ -208,7 +206,7 @@ const DealsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredDeals.map((deal) => (
+                  {filteredDeals.map((deal: Deal) => (
                     <tr key={deal.id} className="hover:bg-slate-50/50 transition-colors group">
                       {/* Deal Title */}
                       <td className="px-6 py-4">

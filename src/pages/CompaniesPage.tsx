@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { 
   Building2, 
   Search, 
@@ -12,6 +12,7 @@ import {
   RefreshCw,
   AlertCircle
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../api';
 import CompanyModal from '../components/CompanyModal';
 
@@ -30,50 +31,53 @@ interface Company {
   area?: Area;
 }
 
+const fetchCompaniesApi = async (): Promise<Company[]> => {
+  const response = await api.get<{ data: Company[] }>('/companies');
+  return response.data.data;
+};
+
+const fetchAreasApi = async (): Promise<Area[]> => {
+  const response = await api.get<{ data: Area[] }>('/areas');
+  return response.data.data;
+};
+
 const CompaniesPage: React.FC = () => {
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedArea, setSelectedArea] = useState<string>('');
-  
-  // Modal State
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [companiesRes, areasRes] = await Promise.all([
-        api.get<{ data: Company[] }>('/companies'),
-        api.get<{ data: Area[] }>('/areas')
-      ]);
-      setCompanies(companiesRes.data.data);
-      setAreas(areasRes.data.data);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      setError('Failed to load companies.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: companies = [], isLoading: loadingCompanies, error: companiesError, refetch: refetchCompanies } = useQuery({
+    queryKey: ['companies'],
+    queryFn: fetchCompaniesApi,
+    staleTime: 30 * 1000,
+  });
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: areas = [] } = useQuery({
+    queryKey: ['areas'],
+    queryFn: fetchAreasApi,
+    staleTime: 60 * 1000,
+  });
+
+  const loading = loadingCompanies;
+  const error = companiesError ? 'Failed to load companies.' : deleteError;
 
   const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this company?')) return;
     setDeletingId(id);
     try {
       await api.delete(`/companies/${id}`);
-      setCompanies(prev => prev.filter(c => c.id !== id));
+      queryClient.setQueryData<Company[]>(['companies'], (old = []) =>
+        old.filter((c: Company) => c.id !== id)
+      );
     } catch (err) {
       console.error('Error deleting company:', err);
-      alert('Failed to delete company. Please try again.');
+      setDeleteError('Failed to delete company.');
+      setTimeout(() => setDeleteError(null), 3000);
     } finally {
       setDeletingId(null);
     }
@@ -90,10 +94,10 @@ const CompaniesPage: React.FC = () => {
   };
 
   const handleSaved = () => {
-    fetchData();
+    refetchCompanies();
   };
 
-  const filteredCompanies = companies.filter(company => {
+  const filteredCompanies = companies.filter((company: Company) => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = 
       company.name.toLowerCase().includes(searchLower) ||
@@ -107,7 +111,6 @@ const CompaniesPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <header className="px-8 py-6 flex items-center justify-between bg-white border-b border-slate-200 shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Companies</h1>
@@ -115,7 +118,7 @@ const CompaniesPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
            <button
-            onClick={fetchData}
+            onClick={() => refetchCompanies()}
             className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition-colors shadow-sm"
           >
             <RefreshCw className="w-4 h-4" />
@@ -132,7 +135,6 @@ const CompaniesPage: React.FC = () => {
       </header>
 
       <div className="flex-1 p-6 overflow-auto">
-        {/* Search + Filter Bar */}
         <div className="flex flex-col md:flex-row gap-3 mb-6">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -152,25 +154,23 @@ const CompaniesPage: React.FC = () => {
               className="pl-9 pr-8 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent shadow-sm appearance-none min-w-[180px]"
             >
               <option value="">All Areas</option>
-              {areas.map(area => (
+              {areas.map((area: Area) => (
                 <option key={area.id} value={area.id}>{area.name}</option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="mb-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
-            <button onClick={fetchData} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+            <button onClick={() => refetchCompanies()} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
               <RefreshCw className="w-4 h-4" /> Retry
             </button>
           </div>
         )}
 
-        {/* Data Table */}
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="flex flex-col items-center gap-3 text-slate-500">
@@ -203,7 +203,7 @@ const CompaniesPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredCompanies.map((company) => (
+                  {filteredCompanies.map((company: Company) => (
                     <tr key={company.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -274,7 +274,6 @@ const CompaniesPage: React.FC = () => {
               </table>
             </div>
             
-            {/* Footer */}
             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex items-center justify-between">
               <span>
                 Showing {filteredCompanies.length} compan{filteredCompanies.length !== 1 ? 'ies' : 'y'}

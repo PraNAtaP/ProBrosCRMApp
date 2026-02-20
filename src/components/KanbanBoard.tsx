@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import KanbanColumn from './KanbanColumn';
 import DealDetailModal from './DealDetailModal';
 import api from '../api';
@@ -28,6 +29,11 @@ const STATUS_COLORS: Record<DealStatus, string> = {
   lost_customer: '#ef4444',
 };
 
+const fetchDealsApi = async (): Promise<Deal[]> => {
+  const response = await api.get<{ data: Deal[] }>('/deals');
+  return response.data.data || (response.data as unknown as Deal[]);
+};
+
 interface KanbanBoardProps {
   onDealsCountChange?: (count: number) => void;
   refreshTrigger?: number;
@@ -35,31 +41,20 @@ interface KanbanBoardProps {
 }
 
 const KanbanBoard: React.FC<KanbanBoardProps> = ({ onDealsCountChange, refreshTrigger, onStatsRefresh }) => {
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [updating, setUpdating] = useState<number | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<number | null>(null);
 
-  const fetchDeals = useCallback(async () => {
-    try {
-      setError(null);
-      const response = await api.get<{ data: Deal[] }>('/deals');
-      const dealsData = response.data.data || (response.data as unknown as Deal[]);
-      setDeals(dealsData);
+  const { data: deals = [], isLoading, error: queryError, refetch } = useQuery({
+    queryKey: ['deals', refreshTrigger],
+    queryFn: fetchDealsApi,
+    staleTime: 30 * 1000,
+  });
 
-      onDealsCountChange?.(dealsData.length);
-    } catch (err) {
-      console.error('Failed to fetch deals:', err);
-      setError('Failed to load deals. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [onDealsCountChange]);
-
-  useEffect(() => {
-    fetchDeals();
-  }, [fetchDeals, refreshTrigger]);
+  React.useEffect(() => {
+    onDealsCountChange?.(deals.length);
+  }, [deals.length, onDealsCountChange]);
 
   const handleDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -75,28 +70,25 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ onDealsCountChange, refreshTr
 
     const originalDeal = deals[dealIndex];
 
-    // Optimistic update
-    const updatedDeals = [...deals];
-    updatedDeals[dealIndex] = {
-      ...originalDeal,
-      status: newStatus,
-      color: STATUS_COLORS[newStatus] || originalDeal.color,
-    };
-    setDeals(updatedDeals);
+    queryClient.setQueryData<Deal[]>(['deals', refreshTrigger], (old = []) =>
+      old.map((d) =>
+        d.id === dealId
+          ? { ...d, status: newStatus, color: STATUS_COLORS[newStatus] || d.color }
+          : d
+      )
+    );
     setUpdating(dealId);
 
     try {
       await api.patch(`/deals/${dealId}`, { status: newStatus });
-      // Trigger stats refresh after successful status change
       onStatsRefresh?.();
     } catch (err) {
       console.error('Failed to update deal status:', err);
-      // Rollback
-      const rolledBackDeals = [...deals];
-      rolledBackDeals[dealIndex] = originalDeal;
-      setDeals(rolledBackDeals);
-      setError(`Failed to move deal. Reverted to ${oldStatus}.`);
-      setTimeout(() => setError(null), 3000);
+      queryClient.setQueryData<Deal[]>(['deals', refreshTrigger], (old = []) =>
+        old.map((d) => (d.id === dealId ? originalDeal : d))
+      );
+      setMoveError(`Failed to move deal. Reverted to ${oldStatus}.`);
+      setTimeout(() => setMoveError(null), 3000);
     } finally {
       setUpdating(null);
     }
@@ -111,7 +103,9 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ onDealsCountChange, refreshTr
     return acc;
   }, {});
 
-  if (loading) {
+  const displayError = queryError ? 'Failed to load deals. Please try again.' : moveError;
+
+  if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-slate-500">
@@ -124,11 +118,11 @@ const KanbanBoard: React.FC<KanbanBoardProps> = ({ onDealsCountChange, refreshTr
 
   return (
     <div className="flex flex-col h-full">
-      {error && (
+      {displayError && (
         <div className="mb-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-          <button onClick={fetchDeals} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+          <span>{displayError}</span>
+          <button onClick={() => refetch()} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
             <RefreshCw className="w-4 h-4" /> Retry
           </button>
         </div>

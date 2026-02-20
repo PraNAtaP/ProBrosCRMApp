@@ -1,25 +1,30 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search, Plus, Pencil, Trash2, Loader2, AlertCircle,
   Users, Building2, Mail, Phone, Briefcase, RefreshCw, FileText,
 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../api';
 import ContactModal from '../components/ContactModal';
 import ActivityLoggerModal from '../components/ActivityLoggerModal';
 import type { Contact } from '../types';
 
+const fetchContactsApi = async (search: string): Promise<Contact[]> => {
+  const params = search ? { search } : {};
+  const response = await api.get<{ data: Contact[] }>('/contacts', { params });
+  return response.data.data || (response.data as unknown as Contact[]);
+};
+
 const ContactsPage: React.FC = () => {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [showModal, setShowModal] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  // Activity Logger state
   const [showLogModal, setShowLogModal] = useState(false);
   const [logContact, setLogContact] = useState<Contact | null>(null);
 
@@ -28,34 +33,26 @@ const ContactsPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const fetchContacts = useCallback(async () => {
-    try {
-      setError(null);
-      const params = debouncedSearch ? { search: debouncedSearch } : {};
-      const response = await api.get<{ data: Contact[] }>('/contacts', { params });
-      setContacts(response.data.data || (response.data as unknown as Contact[]));
-    } catch (err) {
-      console.error('Failed to fetch contacts:', err);
-      setError('Failed to load contacts.');
-    } finally {
-      setLoading(false);
-    }
-  }, [debouncedSearch]);
+  const { data: contacts = [], isLoading: loading, error: queryError, refetch } = useQuery({
+    queryKey: ['contacts', debouncedSearch],
+    queryFn: () => fetchContactsApi(debouncedSearch),
+    staleTime: 30 * 1000,
+  });
 
-  useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts]);
+  const error = queryError ? 'Failed to load contacts.' : deleteError;
 
   const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this contact?')) return;
     setDeletingId(id);
     try {
       await api.delete(`/contacts/${id}`);
-      setContacts((prev) => prev.filter((c) => c.id !== id));
+      queryClient.setQueryData<Contact[]>(['contacts', debouncedSearch], (old = []) =>
+        old.filter((c: Contact) => c.id !== id)
+      );
     } catch (err) {
       console.error('Failed to delete contact:', err);
-      setError('Failed to delete contact.');
-      setTimeout(() => setError(null), 3000);
+      setDeleteError('Failed to delete contact.');
+      setTimeout(() => setDeleteError(null), 3000);
     } finally {
       setDeletingId(null);
     }
@@ -72,7 +69,7 @@ const ContactsPage: React.FC = () => {
   };
 
   const handleSaved = () => {
-    fetchContacts();
+    refetch();
   };
 
   const handleLogActivity = (contact: Contact) => {
@@ -128,7 +125,7 @@ const ContactsPage: React.FC = () => {
           <div className="mb-4 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
-            <button onClick={fetchContacts} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
+            <button onClick={() => refetch()} className="ml-auto flex items-center gap-1 text-red-600 hover:text-red-800 font-medium">
               <RefreshCw className="w-4 h-4" /> Retry
             </button>
           </div>
@@ -172,7 +169,7 @@ const ContactsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {contacts.map((contact) => (
+                  {contacts.map((contact: Contact) => (
                     <tr key={contact.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -259,7 +256,7 @@ const ContactsPage: React.FC = () => {
       <ActivityLoggerModal
         isOpen={showLogModal}
         onClose={() => { setShowLogModal(false); setLogContact(null); }}
-        onSuccess={fetchContacts}
+        onSuccess={() => refetch()}
         preselectedContact={logContact}
       />
     </div>
