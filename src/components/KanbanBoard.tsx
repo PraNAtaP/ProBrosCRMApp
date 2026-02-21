@@ -30,7 +30,7 @@ const STATUS_COLORS: Record<DealStatus, string> = {
 };
 
 const fetchDealsApi = async (): Promise<Deal[]> => {
-  const response = await api.get<{ data: Deal[] }>('/deals');
+  const response = await api.get<{ data: Deal[] }>('/deals', { params: { all: true } });
   return response.data.data || (response.data as unknown as Deal[]);
 };
 
