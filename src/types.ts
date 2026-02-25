@@ -188,3 +188,30 @@ export interface PaginatedResponse<T> {
     total: number;
   };
 }
+
+// ─── Sales Order ─────────────────────────────────
+export type SalesOrderStatus = 'pending' | 'processing' | 'delivered' | 'cancelled';
+export type SalesOrderTab = 'current' | 'delivered' | 'favorites' | 'cancelled' | 'commented' | 'second_run' | 'price_sync';
+
+export interface SalesOrder {
+  id: number;
+  order_number: string;
+  status: SalesOrderStatus;
+  status_color: string;
+  total_amount: number;
+  is_favorite: boolean;
+  is_second_run: boolean;
+  needs_price_sync: boolean;
+  additional_notes?: string | null;
+  delivery_date?: string | null;
+  delivered_at?: string | null;
+  cancelled_at?: string | null;
+  company?: { id: number; name: string; trading_name?: string; display_name?: string } | null;
+  contact?: { id: number; name: string; email?: string } | null;
+  user?: { id: number; name: string } | null;
+  user_id: number;
+  company_id: number;
+  contact_id?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}

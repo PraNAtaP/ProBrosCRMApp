@@ -64,6 +64,7 @@ const ActivityLoggerModal: React.FC<ActivityLoggerModalProps> = ({
     setDuration('30');
     setNotes('');
     setDealId(preselectedDealId ? String(preselectedDealId) : '');
+    setDeals([]);
     setError(null);
     setShowSuccess(false);
     setContactSearch('');
@@ -75,26 +76,6 @@ const ActivityLoggerModal: React.FC<ActivityLoggerModalProps> = ({
     } else {
       setSelectedContact(null);
     }
-
-    // Fetch deals
-    const fetchDeals = async () => {
-      setLoadingDeals(true);
-      try {
-        const res = await api.get<{ data: DealOption[] }>('/deals');
-        const data = res.data.data || (res.data as unknown as DealOption[]);
-        setDeals(
-          (Array.isArray(data) ? data : []).map((d: { id: number; title: string }) => ({
-            id: d.id,
-            title: d.title,
-          }))
-        );
-      } catch {
-        setDeals([]);
-      } finally {
-        setLoadingDeals(false);
-      }
-    };
-    fetchDeals();
 
     // Fetch contacts if no preselected contact
     if (!preselectedContact) {
@@ -113,6 +94,53 @@ const ActivityLoggerModal: React.FC<ActivityLoggerModalProps> = ({
       fetchContacts();
     }
   }, [isOpen, preselectedContact, preselectedDealId]);
+
+  // Dynamically fetch deals when contact changes
+  useEffect(() => {
+    if (!isOpen || !selectedContact) {
+      setDeals([]);
+      if (!preselectedDealId) setDealId('');
+      return;
+    }
+
+    const fetchRelatedDeals = async () => {
+      setLoadingDeals(true);
+      try {
+        // Try by contact_id first, fallback to company_id
+        const contactId = selectedContact.id;
+        const companyId = selectedContact.company?.id || selectedContact.company_id;
+
+        let res = await api.get<{ data: DealOption[] }>('/deals', {
+          params: { contact_id: contactId, all: true },
+        });
+        let data = res.data.data || (res.data as unknown as DealOption[]);
+        let dealsList = (Array.isArray(data) ? data : []).map((d: { id: number; title: string }) => ({
+          id: d.id,
+          title: d.title,
+        }));
+
+        // If no deals for this contact, try by company
+        if (dealsList.length === 0 && companyId) {
+          res = await api.get<{ data: DealOption[] }>('/deals', {
+            params: { company_id: companyId, all: true },
+          });
+          data = res.data.data || (res.data as unknown as DealOption[]);
+          dealsList = (Array.isArray(data) ? data : []).map((d: { id: number; title: string }) => ({
+            id: d.id,
+            title: d.title,
+          }));
+        }
+
+        setDeals(dealsList);
+      } catch {
+        setDeals([]);
+      } finally {
+        setLoadingDeals(false);
+      }
+    };
+
+    fetchRelatedDeals();
+  }, [isOpen, selectedContact, preselectedDealId]);
 
   // Filtered contacts for dropdown
   const filteredContacts = useMemo(() => {
@@ -439,7 +467,6 @@ const ActivityLoggerModal: React.FC<ActivityLoggerModalProps> = ({
             </div>
           </div>
 
-          {/* Deal (optional) */}
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">
               Related Deal <span className="font-normal text-slate-400">(optional)</span>
@@ -448,10 +475,18 @@ const ActivityLoggerModal: React.FC<ActivityLoggerModalProps> = ({
               <select
                 value={dealId}
                 onChange={(e) => setDealId(e.target.value)}
-                disabled={loadingDeals}
-                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent appearance-none pr-10 transition-shadow"
+                disabled={loadingDeals || !selectedContact}
+                className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent appearance-none pr-10 transition-shadow disabled:bg-slate-50 disabled:text-slate-400"
               >
-                <option value="">No deal selected</option>
+                <option value="">
+                  {!selectedContact
+                    ? 'Select a contact first'
+                    : loadingDeals
+                    ? 'Loading deals...'
+                    : deals.length === 0
+                    ? 'No active deals for this contact'
+                    : 'Select a deal'}
+                </option>
                 {deals.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.title}

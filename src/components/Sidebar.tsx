@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Building2, Map, Briefcase, Wallet, BarChart3, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Map, Briefcase, Wallet, BarChart3, ShoppingCart, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface NavItem {
@@ -19,6 +19,7 @@ const Sidebar: React.FC = () => {
     { name: 'Companies', path: '/companies', icon: Building2 },
     { name: 'Areas', path: '/areas', icon: Map },
     { name: 'Deals', path: '/deals', icon: Briefcase },
+    { name: 'Sales Orders', path: '/sales-orders', icon: ShoppingCart },
     { name: 'Commissions', path: '/commissions', icon: Wallet },
     { name: 'Reports', path: '/reports', icon: BarChart3 },
   ];

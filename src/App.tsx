@@ -10,6 +10,7 @@ import CommissionManagement from './pages/CommissionManagement';
 import CompaniesPage from './pages/CompaniesPage';
 import AreasPage from './pages/AreasPage';
 import ReportsPage from './pages/ReportsPage';
+import SalesOrderDashboard from './pages/SalesOrderDashboard';
 
 // Protected Route wrapper
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -37,6 +38,7 @@ function AppRoutes() {
         <Route path="companies" element={<CompaniesPage />} />
         <Route path="areas" element={<AreasPage />} />
         <Route path="deals" element={<DealsPage />} />
+        <Route path="sales-orders" element={<SalesOrderDashboard />} />
         <Route path="commissions" element={<CommissionManagement />} />
         <Route path="reports" element={<ReportsPage />} />
       </Route>
