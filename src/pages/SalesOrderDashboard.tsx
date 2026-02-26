@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  ShoppingCart, Search, Star, StarOff, Truck, XCircle, MessageSquare,
-  RefreshCw, DollarSign, Plus, Trash2, Loader2, CheckCircle2,
+  ShoppingCart, Search, Star, StarOff, Truck, XCircle,
+  Plus, Trash2, Loader2, CheckCircle2,
   ChevronDown, AlertCircle, Package, Clock, Filter,
 } from 'lucide-react';
 import api from '../api';
@@ -13,9 +13,6 @@ const TABS: { id: SalesOrderTab; label: string; icon: React.FC<{ className?: str
   { id: 'delivered', label: 'Delivered', icon: Truck },
   { id: 'favorites', label: 'Favorites', icon: Star },
   { id: 'cancelled', label: 'Cancelled', icon: XCircle },
-  { id: 'commented', label: 'Commented', icon: MessageSquare },
-  { id: 'second_run', label: '2nd Run', icon: RefreshCw },
-  { id: 'price_sync', label: 'Price Sync', icon: DollarSign },
 ];
 
 const STATUS_OPTIONS: { value: SalesOrderStatus; label: string; color: string }[] = [
@@ -343,21 +340,7 @@ const SalesOrderDashboard: React.FC = () => {
           )}
         </div>
 
-        {/* Notes column for commented tab */}
-        {activeTab === 'commented' && orders.length > 0 && (
-          <div className="p-4 border-t border-slate-100 space-y-2">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Notes</h3>
-            {orders.filter(o => o.additional_notes).map((order) => (
-              <div key={order.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
-                <MessageSquare className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold text-slate-700">{order.order_number}</p>
-                  <p className="text-sm text-slate-600 mt-0.5">{order.additional_notes}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+
       </div>
 
       {/* Create Order Modal */}
